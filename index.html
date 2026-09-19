@@ -408,6 +408,20 @@ table.heat td.rowhead{text-align:left; font-weight:600;}
   </div>
 </div>
 
+<div class="modal-backdrop" id="deletePlantationBackdrop">
+  <div class="modal">
+    <div class="modal-close-row"><button class="x-btn" id="deletePlantationClose">Close</button></div>
+    <h3>Delete plantation</h3>
+    <p class="muted-note" style="margin:0 0 14px">This permanently deletes <b id="dp-name" style="color:var(--ink)"></b> and every record, worker, and section in it. This cannot be undone.</p>
+    <div class="field">
+      <label for="dp-confirm">Type the plantation name to confirm</label>
+      <input type="text" id="dp-confirm" autocomplete="off" autocapitalize="off" spellcheck="false">
+    </div>
+    <div class="err" id="dp-err"></div>
+    <button class="btn btn-danger" id="dp-deleteBtn">Delete this plantation</button>
+  </div>
+</div>
+
 <div class="toast" id="toast"></div>
 
 <script>
@@ -422,7 +436,7 @@ var state = {
   workers: [],
   sections: [],
   records: [],
-  unsubWorkers: null, unsubSections: null, unsubRecords: null
+  unsubWorkers: null, unsubSections: null, unsubRecords: null, unsubPlantationDoc: null
 };
 
 function toast(msg){
@@ -522,9 +536,10 @@ function subscribePlantationData(id){
   if (state.unsubWorkers) state.unsubWorkers();
   if (state.unsubSections) state.unsubSections();
   if (state.unsubRecords) state.unsubRecords();
+  if (state.unsubPlantationDoc) state.unsubPlantationDoc();
 
   var pdoc = db.doc('plantations/' + id);
-  pdoc.onSnapshot(function(snap){
+  state.unsubPlantationDoc = pdoc.onSnapshot(function(snap){
     if (!snap.exists) return;
     var data = snap.data(); data.id = id;
     state.current = data;
@@ -920,21 +935,52 @@ async function saveBaseline(){
   toast('Settings saved');
 }
 
-async function deleteCurrentPlantation(){
-  if (!confirm('Delete "' + (state.current ? state.current.name : '') + '" and all its data? This cannot be undone.')) return;
-  if (!confirm('Really delete everything for this plantation? Type-confirm by pressing OK again.')) return;
-  var pid = state.currentId;
-  var pdoc = db.doc('plantations/' + pid);
-  var recSnap = await pdoc.collection('records').get();
-  for (var i=0;i<recSnap.docs.length;i++){ await pdoc.collection('records').doc(recSnap.docs[i].id).delete(); }
-  var wSnap = await pdoc.collection('workers').get();
-  for (var j=0;j<wSnap.docs.length;j++){ await pdoc.collection('workers').doc(wSnap.docs[j].id).delete(); }
-  var sSnap = await pdoc.collection('sections').get();
-  for (var k=0;k<sSnap.docs.length;k++){ await pdoc.collection('sections').doc(sSnap.docs[k].id).delete(); }
-  await pdoc.delete();
-  state.currentId = null;
-  toast('Plantation deleted');
-  await loadPlantations();
+function openDeletePlantationModal(){
+  if (!state.current){ toast('No plantation selected'); return; }
+  document.getElementById('dp-name').textContent = state.current.name || 'Untitled';
+  document.getElementById('dp-confirm').value = '';
+  document.getElementById('dp-err').style.display = 'none';
+  document.getElementById('dp-deleteBtn').disabled = false;
+  document.getElementById('dp-deleteBtn').textContent = 'Delete this plantation';
+  document.getElementById('deletePlantationBackdrop').classList.add('open');
+  document.getElementById('dp-confirm').focus();
+}
+function closeDeletePlantationModal(){
+  document.getElementById('deletePlantationBackdrop').classList.remove('open');
+}
+async function confirmDeletePlantation(){
+  var errEl = document.getElementById('dp-err');
+  errEl.style.display = 'none';
+  var typed = document.getElementById('dp-confirm').value.trim();
+  var expected = (state.current && state.current.name) ? state.current.name.trim() : '';
+  if (typed === '' || typed !== expected){
+    errEl.textContent = 'Type the plantation name exactly as shown to confirm.';
+    errEl.style.display = 'block';
+    return;
+  }
+  var btn = document.getElementById('dp-deleteBtn');
+  btn.disabled = true;
+  btn.textContent = 'Deleting…';
+  try {
+    var pid = state.currentId;
+    var pdoc = db.doc('plantations/' + pid);
+    var recSnap = await pdoc.collection('records').get();
+    for (var i=0;i<recSnap.docs.length;i++){ await pdoc.collection('records').doc(recSnap.docs[i].id).delete(); }
+    var wSnap = await pdoc.collection('workers').get();
+    for (var j=0;j<wSnap.docs.length;j++){ await pdoc.collection('workers').doc(wSnap.docs[j].id).delete(); }
+    var sSnap = await pdoc.collection('sections').get();
+    for (var k=0;k<sSnap.docs.length;k++){ await pdoc.collection('sections').doc(sSnap.docs[k].id).delete(); }
+    await pdoc.delete();
+    state.currentId = null;
+    closeDeletePlantationModal();
+    toast('Plantation deleted');
+    await loadPlantations();
+  } catch(e){
+    btn.disabled = false;
+    btn.textContent = 'Delete this plantation';
+    errEl.textContent = 'Something went wrong deleting this plantation: ' + (e && e.message ? e.message : String(e));
+    errEl.style.display = 'block';
+  }
 }
 
 async function exportCsv(){
@@ -1016,7 +1062,12 @@ function wireEvents(){
   });
   document.getElementById('saveBaselineBtn').addEventListener('click', saveBaseline);
   document.getElementById('exportCsvBtn').addEventListener('click', exportCsv);
-  document.getElementById('deletePlantationBtn').addEventListener('click', deleteCurrentPlantation);
+  document.getElementById('deletePlantationBtn').addEventListener('click', openDeletePlantationModal);
+  document.getElementById('deletePlantationClose').addEventListener('click', closeDeletePlantationModal);
+  document.getElementById('dp-deleteBtn').addEventListener('click', confirmDeletePlantation);
+  document.getElementById('dp-confirm').addEventListener('keydown', function(e){
+    if (e.key === 'Enter'){ e.preventDefault(); confirmDeletePlantation(); }
+  });
 
   ['newWorkerInput','newSectionInput'].forEach(function(id){
     document.getElementById(id).addEventListener('keydown', function(e){
