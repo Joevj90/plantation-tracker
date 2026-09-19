@@ -1,0 +1,1079 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+<title>Plantation Tracker</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,600&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
+<script src="firebase-config.js"></script>
+<style>
+:root{
+  --bg:#F5F1E6; --bg-dark:#1B1E17;
+  --surface:#FFFFFF; --surface-dark:#242820;
+  --ink:#22271D; --ink-dark:#ECE8DA;
+  --ink-muted:#736F60; --ink-muted-dark:#9B9886;
+  --line:#E1DBC6; --line-dark:#39402F;
+  --green:#2F5233; --green-light:#4C7A50; --green-pale:#E4EDE0;
+  --amber:#B9762F; --amber-pale:#F6E7D2;
+  --rust:#A6453C; --rust-pale:#F5E0DC;
+  --radius:14px;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --bg:var(--bg-dark); --surface:var(--surface-dark); --ink:var(--ink-dark);
+    --ink-muted:var(--ink-muted-dark); --line:var(--line-dark);
+    --green-pale:#25301F; --amber-pale:#3A2C15; --rust-pale:#3A211D;
+  }
+}
+:root[data-theme="dark"]{
+  --bg:var(--bg-dark); --surface:var(--surface-dark); --ink:var(--ink-dark);
+  --ink-muted:var(--ink-muted-dark); --line:var(--line-dark);
+  --green-pale:#25301F; --amber-pale:#3A2C15; --rust-pale:#3A211D;
+}
+*{box-sizing:border-box;}
+body{
+  margin:0; background:var(--bg); color:var(--ink);
+  font-family:'Inter',system-ui,-apple-system,sans-serif;
+  -webkit-font-smoothing:antialiased; padding-bottom:76px;
+  min-height:100vh;
+}
+h1,h2,h3,.num{font-family:'Fraunces',Georgia,serif;}
+.app{max-width:520px; margin:0 auto; padding:0 16px;}
+.topbar{
+  position:sticky; top:0; z-index:20; background:var(--bg);
+  padding:14px 0 10px; border-bottom:1px solid var(--line);
+}
+.topbar-row{display:flex; align-items:center; justify-content:space-between; gap:10px;}
+.brand{display:flex; align-items:center; gap:8px; min-width:0;}
+.brand-mark{width:30px; height:30px; border-radius:8px; background:var(--green); flex:none; position:relative;}
+.brand-mark::after{content:"";position:absolute; left:8px; top:5px; width:5px; height:16px; background:var(--amber); border-radius:3px; transform:rotate(18deg);}
+.plantation-select{
+  font-family:'Fraunces',serif; font-weight:500; font-size:17px; color:var(--ink);
+  border:none; background:none; padding:2px 0; max-width:220px;
+  text-overflow:ellipsis; white-space:nowrap; overflow:hidden;
+}
+select, input, button{font-family:inherit; font-size:15px;}
+.icon-btn{
+  width:36px; height:36px; border-radius:10px; border:1px solid var(--line);
+  background:var(--surface); color:var(--ink); display:flex; align-items:center;
+  justify-content:center; font-size:16px; flex:none;
+}
+.icon-btn:active{transform:scale(0.96);}
+
+.tabs{display:flex; gap:6px; margin-top:12px;}
+.tab-btn{
+  flex:1; padding:8px 4px; border-radius:10px; border:1px solid transparent;
+  background:none; color:var(--ink-muted); font-weight:600; font-size:13px;
+}
+.tab-btn.active{background:var(--green); color:#fff;}
+
+section.view{display:none; padding:18px 0 8px;}
+section.view.active{display:block;}
+
+.card{
+  background:var(--surface); border:1px solid var(--line); border-radius:var(--radius);
+  padding:16px; margin-bottom:14px;
+}
+.card h2{font-size:16px; font-weight:600; margin:0 0 12px; color:var(--ink);}
+.card h2 small{display:block; font-family:'Inter',sans-serif; font-weight:400; font-size:12px; color:var(--ink-muted); margin-top:2px;}
+
+.field{margin-bottom:12px;}
+.field label{display:block; font-size:12px; color:var(--ink-muted); margin-bottom:5px; font-weight:600;}
+.field select, .field input{
+  width:100%; padding:10px 12px; border:1px solid var(--line); border-radius:10px;
+  background:var(--bg); color:var(--ink);
+}
+.field-row{display:flex; gap:10px;}
+.field-row .field{flex:1;}
+.btn{
+  display:inline-flex; align-items:center; justify-content:center; gap:6px;
+  padding:11px 16px; border-radius:10px; border:1px solid var(--line);
+  background:var(--surface); color:var(--ink); font-weight:600; width:100%;
+}
+.btn:active{transform:scale(0.98);}
+.btn-primary{background:var(--green); border-color:var(--green); color:#fff;}
+.btn-danger{background:var(--rust-pale); border-color:var(--rust-pale); color:var(--rust);}
+.btn-sm{width:auto; padding:7px 12px; font-size:13px;}
+.btn-ghost{background:none;}
+.err{color:var(--rust); font-size:12px; margin-top:4px; display:none;}
+
+.entry-row{
+  display:flex; justify-content:space-between; align-items:center; gap:10px;
+  padding:11px 0; border-bottom:1px solid var(--line);
+}
+.entry-row:last-child{border-bottom:none;}
+.entry-main{min-width:0;}
+.entry-date{font-size:11px; color:var(--ink-muted); font-weight:600; letter-spacing:0.02em;}
+.entry-who{font-size:14.5px; font-weight:600; margin-top:1px;}
+.entry-nums{font-size:13px; color:var(--ink-muted); margin-top:1px;}
+.entry-nums b{color:var(--green); font-weight:600;}
+
+.empty{text-align:center; padding:28px 10px; color:var(--ink-muted);}
+.empty .ico{font-size:26px; margin-bottom:8px;}
+.empty p{margin:2px 0; font-size:13.5px;}
+
+.stat-grid{display:grid; grid-template-columns:1fr 1fr; gap:10px;}
+.stat{background:var(--green-pale); border-radius:10px; padding:12px;}
+.stat .lab{font-size:11px; color:var(--ink-muted); font-weight:600; text-transform:uppercase; letter-spacing:0.03em;}
+.stat .val{font-size:22px; margin-top:3px;}
+
+.rank-row{margin-bottom:11px;}
+.rank-top{display:flex; justify-content:space-between; font-size:13.5px; margin-bottom:4px;}
+.rank-name{font-weight:600;}
+.rank-val{color:var(--ink-muted);}
+.rank-bar-bg{height:7px; border-radius:5px; background:var(--line); overflow:hidden;}
+.rank-bar-fill{height:100%; border-radius:5px; background:var(--green);}
+
+.badge{display:inline-block; font-size:11px; font-weight:700; padding:3px 9px; border-radius:20px;}
+.badge-high{background:var(--amber-pale); color:var(--amber);}
+.badge-low{background:var(--rust-pale); color:var(--rust);}
+.badge-normal{background:var(--green-pale); color:var(--green);}
+.badge-insufficient{background:var(--line); color:var(--ink-muted);}
+
+.flag-row{display:flex; justify-content:space-between; align-items:center; padding:9px 0; border-bottom:1px solid var(--line); gap:8px;}
+.flag-row:last-child{border-bottom:none;}
+.flag-left{min-width:0;}
+.flag-name{font-weight:600; font-size:14px;}
+.flag-sub{font-size:12px; color:var(--ink-muted); margin-top:1px;}
+
+.bars-wrap{overflow-x:auto; padding-bottom:4px;}
+.bars{display:flex; align-items:flex-end; gap:10px; height:140px; min-width:min-content; padding-top:8px;}
+.bar-col{display:flex; flex-direction:column; align-items:center; justify-content:flex-end; width:30px; height:100%;}
+.bar-shape{width:16px; border-radius:3px 3px 0 0; background:var(--green);}
+.bar-shape.waste{background:var(--rust); opacity:0.75; margin-top:2px;}
+.bar-label{font-size:9.5px; color:var(--ink-muted); margin-top:6px; writing-mode:horizontal-tb; text-align:center;}
+.legend{display:flex; gap:14px; font-size:12px; color:var(--ink-muted); margin-top:10px;}
+.legend span{display:inline-flex; align-items:center; gap:5px;}
+.dot{width:9px; height:9px; border-radius:3px;}
+
+table.heat{border-collapse:collapse; width:100%; font-size:12.5px;}
+table.heat th, table.heat td{padding:7px 8px; text-align:center; white-space:nowrap;}
+table.heat th{font-weight:600; color:var(--ink-muted); font-size:11px;}
+table.heat td.rowhead{text-align:left; font-weight:600;}
+.heat-wrap{overflow-x:auto;}
+
+.list-row{display:flex; align-items:center; justify-content:space-between; padding:10px 0; border-bottom:1px solid var(--line);}
+.list-row:last-child{border-bottom:none;}
+.chip{display:flex; align-items:center; gap:8px; padding:6px 12px; border-radius:20px; background:var(--green-pale); color:var(--green); font-weight:600; font-size:13px;}
+
+.modal-backdrop{
+  display:none; position:fixed; inset:0; background:rgba(20,20,15,0.45);
+  z-index:50; align-items:flex-end; justify-content:center;
+}
+.modal-backdrop.open{display:flex;}
+.modal{
+  background:var(--surface); border-radius:18px 18px 0 0; padding:20px 18px 26px;
+  width:100%; max-width:520px; max-height:85vh; overflow-y:auto;
+}
+.modal h3{margin:0 0 14px; font-size:17px;}
+.modal-close-row{display:flex; justify-content:flex-end; margin-bottom:-6px;}
+
+.tabbar{
+  position:fixed; bottom:0; left:0; right:0; background:var(--surface);
+  border-top:1px solid var(--line); z-index:20;
+  padding:6px 0 max(6px, env(safe-area-inset-bottom));
+}
+.tabbar-inner{max-width:520px; margin:0 auto; display:flex;}
+.tabbar-btn{
+  flex:1; display:flex; flex-direction:column; align-items:center; gap:3px;
+  padding:6px 2px; background:none; border:none; color:var(--ink-muted); font-weight:600; font-size:10.5px;
+}
+.tabbar-btn.active{color:var(--green);}
+.tabbar-btn .ic{font-size:19px;}
+
+.toast{
+  position:fixed; bottom:84px; left:50%; transform:translateX(-50%);
+  background:var(--ink); color:var(--bg); padding:9px 16px; border-radius:20px;
+  font-size:13px; z-index:60; opacity:0; transition:opacity 0.2s; pointer-events:none;
+}
+.toast.show{opacity:1;}
+
+.muted-note{font-size:12px; color:var(--ink-muted); line-height:1.5;}
+.sub-list-item{display:flex; justify-content:space-between; align-items:center; padding:9px 0; border-bottom:1px solid var(--line);}
+.sub-list-item:last-child{border-bottom:none;}
+.sub-list-item .name{font-weight:600; font-size:14px;}
+.x-btn{background:none; border:none; color:var(--ink-muted); font-size:15px; padding:4px 8px;}
+</style>
+</head>
+<body>
+
+<div id="passwordGate" style="position:fixed; inset:0; background:var(--bg); z-index:100; display:flex; align-items:center; justify-content:center; padding:20px;">
+  <div style="max-width:340px; width:100%; text-align:center;">
+    <div style="width:44px; height:44px; border-radius:12px; background:var(--green); margin:0 auto 18px; position:relative;">
+      <div style="position:absolute; left:13px; top:8px; width:7px; height:24px; background:var(--amber); border-radius:4px; transform:rotate(18deg);"></div>
+    </div>
+    <h1 style="font-size:20px; margin:0 0 4px;">Plantation Tracker</h1>
+    <p style="color:var(--ink-muted); font-size:13.5px; margin:0 0 20px;">Enter the shared password to continue.</p>
+    <input type="password" id="gatePassword" placeholder="Password" style="width:100%; padding:11px 12px; border:1px solid var(--line); border-radius:10px; background:var(--surface); color:var(--ink); text-align:center; font-size:15px; margin-bottom:10px;">
+    <div class="err" id="gateErr" style="margin-bottom:10px;">Incorrect password. Try again.</div>
+    <button class="btn btn-primary" id="gateSubmit" style="width:100%;">Enter</button>
+  </div>
+</div>
+
+<div class="app" id="appRoot" style="display:none;">
+
+  <div class="topbar">
+    <div class="topbar-row">
+      <div class="brand">
+        <div class="brand-mark" aria-hidden="true"></div>
+        <select id="plantationSelect" class="plantation-select"></select>
+      </div>
+      <button class="icon-btn" id="addPlantationBtn" title="Add plantation" aria-label="Add plantation">+</button>
+    </div>
+    <div class="tabs" role="tablist" style="display:none"></div>
+  </div>
+
+  <!-- LOG -->
+  <section class="view active" id="view-log">
+    <div class="card">
+      <h2>New record</h2>
+      <div class="field-row">
+        <div class="field">
+          <label for="f-date">Date</label>
+          <input type="date" id="f-date">
+        </div>
+      </div>
+      <div class="field-row">
+        <div class="field">
+          <label for="f-worker">Worker</label>
+          <select id="f-worker"></select>
+        </div>
+        <div class="field">
+          <label for="f-section">Section</label>
+          <select id="f-section"></select>
+        </div>
+      </div>
+      <div class="field-row">
+        <div class="field">
+          <label for="f-yield">Yield (kg)</label>
+          <input type="number" inputmode="decimal" step="0.1" min="0" id="f-yield" placeholder="0.0">
+        </div>
+        <div class="field">
+          <label for="f-waste">Waste (kg)</label>
+          <input type="number" inputmode="decimal" step="0.1" min="0" id="f-waste" placeholder="0.0">
+        </div>
+      </div>
+      <div class="err" id="f-err"></div>
+      <button class="btn btn-primary" id="saveEntryBtn">Save record</button>
+    </div>
+
+    <div class="card" id="recentCard">
+      <h2>Recent records</h2>
+      <div id="recentList"></div>
+    </div>
+  </section>
+
+  <!-- DASHBOARD -->
+  <section class="view" id="view-dashboard">
+    <div class="card">
+      <div class="stat-grid">
+        <div class="stat"><div class="lab">Total yield</div><div class="val num" id="statYield">0 kg</div></div>
+        <div class="stat"><div class="lab">Total waste</div><div class="val num" id="statWaste">0 kg</div></div>
+        <div class="stat"><div class="lab">Waste %</div><div class="val num" id="statWastePct">0%</div></div>
+        <div class="stat"><div class="lab">Days logged</div><div class="val num" id="statDays">0</div></div>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2>Monthly production<small>Yield vs waste, last 12 months</small></h2>
+      <div class="bars-wrap"><div class="bars" id="monthlyBars"></div></div>
+      <div class="legend">
+        <span><i class="dot" style="background:var(--green)"></i>Yield</span>
+        <span><i class="dot" style="background:var(--rust)"></i>Waste</span>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2>Worker productivity<small>Average kg per working day</small></h2>
+      <div id="workerRank"></div>
+    </div>
+
+    <div class="card">
+      <h2>Section productivity<small>Average kg per active day</small></h2>
+      <div id="sectionRank"></div>
+    </div>
+
+    <div class="card">
+      <h2>Worker &times; section<small>Avg kg / working day</small></h2>
+      <div class="heat-wrap"><table class="heat" id="heatTable"></table></div>
+    </div>
+
+    <div class="card">
+      <h2>Rolling performance<small id="rollingSub">vs trailing 3-month average</small></h2>
+      <div id="flagsList"></div>
+    </div>
+  </section>
+
+  <!-- SETUP -->
+  <section class="view" id="view-setup">
+    <div class="card">
+      <h2>Plantation</h2>
+      <div class="field">
+        <label for="setup-name">Name</label>
+        <input type="text" id="setup-name" placeholder="e.g. North Estate">
+      </div>
+      <button class="btn" id="renamePlantationBtn">Save name</button>
+    </div>
+
+    <div class="card">
+      <h2>Workers</h2>
+      <div class="field-row">
+        <div class="field" style="flex:1"><input type="text" id="newWorkerInput" placeholder="Worker name"></div>
+        <button class="btn btn-primary" style="width:auto" id="addWorkerBtn">Add</button>
+      </div>
+      <div id="workerList"></div>
+    </div>
+
+    <div class="card">
+      <h2>Sections</h2>
+      <div class="field-row">
+        <div class="field" style="flex:1"><input type="text" id="newSectionInput" placeholder="Section code, e.g. A"></div>
+        <button class="btn btn-primary" style="width:auto" id="addSectionBtn">Add</button>
+      </div>
+      <div id="sectionList"></div>
+    </div>
+
+    <div class="card">
+      <h2>Rolling baseline settings</h2>
+      <div class="field">
+        <label for="setup-asof">Current evaluation month</label>
+        <input type="month" id="setup-asof">
+      </div>
+      <div class="field">
+        <label for="setup-threshold">Flag threshold (%)</label>
+        <input type="number" id="setup-threshold" min="1" max="100" step="1">
+      </div>
+      <button class="btn" id="saveBaselineBtn">Save settings</button>
+      <p class="muted-note" style="margin-top:10px">Current month is compared against the average of the 3 calendar months before it. Needs 3 months of history to compare.</p>
+    </div>
+
+    <div class="card">
+      <h2>Backup</h2>
+      <button class="btn" id="exportCsvBtn">Export all records as CSV</button>
+    </div>
+
+    <div class="card">
+      <h2>Delete plantation</h2>
+      <p class="muted-note">Permanently deletes this plantation and every record, worker and section in it. This cannot be undone.</p>
+      <button class="btn btn-danger" id="deletePlantationBtn" style="margin-top:10px">Delete this plantation</button>
+    </div>
+  </section>
+
+</div>
+
+<div class="tabbar">
+  <div class="tabbar-inner">
+    <button class="tabbar-btn active" data-tab="log"><span class="ic">&#9998;</span>Log</button>
+    <button class="tabbar-btn" data-tab="dashboard"><span class="ic">&#9707;</span>Dashboard</button>
+    <button class="tabbar-btn" data-tab="setup"><span class="ic">&#9881;</span>Setup</button>
+  </div>
+</div>
+
+<div class="modal-backdrop" id="editModalBackdrop">
+  <div class="modal">
+    <div class="modal-close-row"><button class="x-btn" id="editModalClose">Close</button></div>
+    <h3>Edit record</h3>
+    <div class="field">
+      <label for="e-date">Date</label>
+      <input type="date" id="e-date">
+    </div>
+    <div class="field-row">
+      <div class="field"><label for="e-worker">Worker</label><select id="e-worker"></select></div>
+      <div class="field"><label for="e-section">Section</label><select id="e-section"></select></div>
+    </div>
+    <div class="field-row">
+      <div class="field"><label for="e-yield">Yield (kg)</label><input type="number" step="0.1" min="0" id="e-yield"></div>
+      <div class="field"><label for="e-waste">Waste (kg)</label><input type="number" step="0.1" min="0" id="e-waste"></div>
+    </div>
+    <div class="err" id="e-err"></div>
+    <button class="btn btn-primary" id="e-saveBtn">Save changes</button>
+    <button class="btn btn-danger" id="e-deleteBtn" style="margin-top:8px">Delete record</button>
+  </div>
+</div>
+
+<div class="modal-backdrop" id="addPlantationBackdrop">
+  <div class="modal">
+    <div class="modal-close-row"><button class="x-btn" id="addPlantationClose">Close</button></div>
+    <h3>New plantation</h3>
+    <div class="field">
+      <label for="np-name">Name</label>
+      <input type="text" id="np-name" placeholder="e.g. South Estate">
+    </div>
+    <div class="err" id="np-err"></div>
+    <button class="btn btn-primary" id="np-createBtn">Create plantation</button>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+(function(){
+"use strict";
+
+var db = null;
+var state = {
+  plantations: [],
+  currentId: null,
+  current: null,   // plantation doc data + id
+  workers: [],
+  sections: [],
+  records: [],
+  unsubWorkers: null, unsubSections: null, unsubRecords: null
+};
+
+function toast(msg){
+  var t = document.getElementById('toast');
+  t.textContent = msg;
+  t.classList.add('show');
+  setTimeout(function(){ t.classList.remove('show'); }, 1800);
+}
+
+function todayIso(){
+  var d = new Date();
+  return d.getFullYear() + '-' + pad(d.getMonth()+1) + '-' + pad(d.getDate());
+}
+function pad(n){ return n < 10 ? '0'+n : ''+n; }
+function monthKeyOf(iso){ return iso.slice(0,7); }
+function addMonths(mk, delta){
+  var parts = mk.split('-'); var y = parseInt(parts[0],10); var m = parseInt(parts[1],10) - 1;
+  var d = new Date(Date.UTC(y, m + delta, 1));
+  return d.getUTCFullYear() + '-' + pad(d.getUTCMonth()+1);
+}
+function monthLabel(mk){
+  var parts = mk.split('-'); var y = parseInt(parts[0],10); var m = parseInt(parts[1],10) - 1;
+  var d = new Date(Date.UTC(y, m, 1));
+  return d.toLocaleDateString('en-US', {month:'short', year:'2-digit', timeZone:'UTC'});
+}
+function round1(n){ return Math.round(n*10)/10; }
+function fmtKg(n){ return round1(n).toLocaleString(undefined,{maximumFractionDigits:1}) + ' kg'; }
+function fmtPct(n){ return round1(n*1000)/10 + '%'; }
+function escapeHtml(s){
+  return String(s).replace(/[&<>"']/g, function(c){
+    return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];
+  });
+}
+
+// ---------- storage init (Firebase) ----------
+async function initCaps(){
+  try {
+    firebase.initializeApp(firebaseConfig);
+    db = firebase.firestore();
+    // touch the store once so a bad config fails fast and visibly
+    await db.collection('plantations').limit(1).get();
+  } catch(e) {
+    db = null;
+    document.getElementById('appRoot').innerHTML =
+      '<div class="card" style="margin-top:40px"><h2>Can\'t reach the database</h2>' +
+      '<p class="muted-note">Check that firebase-config.js has your real Firebase project keys and that Firestore is enabled. (' +
+      escapeHtml(e && e.message ? e.message : String(e)) + ')</p></div>';
+    return false;
+  }
+  return true;
+}
+
+// ---------- plantations ----------
+async function loadPlantations(){
+  var snap = await db.collection('plantations').get();
+  var list = snap.docs.map(function(d){ var b = d.data(); b.id = d.id; return b; });
+  list.sort(function(a,b){ return (a.name||'').localeCompare(b.name||''); });
+  state.plantations = list;
+  renderPlantationSelect();
+  if (list.length === 0){
+    await createPlantation('My Plantation', true);
+  } else if (!state.currentId || !list.find(function(p){return p.id===state.currentId;})){
+    selectPlantation(list[0].id);
+  }
+}
+
+function renderPlantationSelect(){
+  var sel = document.getElementById('plantationSelect');
+  sel.innerHTML = '';
+  state.plantations.forEach(function(p){
+    var o = document.createElement('option');
+    o.value = p.id; o.textContent = p.name || 'Untitled';
+    sel.appendChild(o);
+  });
+  if (state.currentId) sel.value = state.currentId;
+}
+
+async function createPlantation(name, silent){
+  var ref = await db.collection('plantations').add({
+    name: name, createdAt: new Date().toISOString(),
+    asOfMonth: monthKeyOf(todayIso()), thresholdPct: 0.2
+  });
+  await loadPlantations();
+  selectPlantation(ref.id);
+  try { localStorage.setItem('ptk_current', ref.id); } catch(e){}
+  if (!silent) toast('Plantation created');
+}
+
+function selectPlantation(id){
+  state.currentId = id;
+  try { localStorage.setItem('ptk_current', id); } catch(e){}
+  renderPlantationSelect();
+  subscribePlantationData(id);
+}
+
+function subscribePlantationData(id){
+  if (state.unsubWorkers) state.unsubWorkers();
+  if (state.unsubSections) state.unsubSections();
+  if (state.unsubRecords) state.unsubRecords();
+
+  var pdoc = db.doc('plantations/' + id);
+  pdoc.onSnapshot(function(snap){
+    if (!snap.exists) return;
+    var data = snap.data(); data.id = id;
+    state.current = data;
+    document.getElementById('setup-name').value = data.name || '';
+    document.getElementById('setup-asof').value = data.asOfMonth || monthKeyOf(todayIso());
+    document.getElementById('setup-threshold').value = Math.round((data.thresholdPct != null ? data.thresholdPct : 0.2) * 100);
+    renderDashboard();
+  });
+
+  state.unsubWorkers = pdoc.collection('workers').onSnapshot(function(snap){
+    state.workers = snap.docs.map(function(d){ var b=d.data(); b.id=d.id; return b; })
+      .sort(function(a,b){ return (a.name||'').localeCompare(b.name||''); });
+    renderWorkerOptions(); renderWorkerList(); renderDashboard();
+  });
+  state.unsubSections = pdoc.collection('sections').onSnapshot(function(snap){
+    state.sections = snap.docs.map(function(d){ var b=d.data(); b.id=d.id; return b; })
+      .sort(function(a,b){ return (a.name||'').localeCompare(b.name||''); });
+    renderSectionOptions(); renderSectionList(); renderDashboard();
+  });
+  state.unsubRecords = pdoc.collection('records').orderBy('date','desc').limit(1000).onSnapshot(function(snap){
+    state.records = snap.docs.map(function(d){ var b=d.data(); b.id=d.id; return b; });
+    renderRecent(); renderDashboard();
+  });
+}
+
+// ---------- workers / sections ----------
+function renderWorkerOptions(){
+  ['f-worker','e-worker'].forEach(function(id){
+    var sel = document.getElementById(id);
+    var cur = sel.value;
+    sel.innerHTML = '';
+    if (state.workers.length === 0){
+      var o = document.createElement('option'); o.value=''; o.textContent='Add a worker in Setup first';
+      sel.appendChild(o);
+    }
+    state.workers.forEach(function(w){
+      var o = document.createElement('option'); o.value = w.name; o.textContent = w.name;
+      sel.appendChild(o);
+    });
+    if (cur) sel.value = cur;
+  });
+}
+function renderSectionOptions(){
+  ['f-section','e-section'].forEach(function(id){
+    var sel = document.getElementById(id);
+    var cur = sel.value;
+    sel.innerHTML = '';
+    if (state.sections.length === 0){
+      var o = document.createElement('option'); o.value=''; o.textContent='Add a section in Setup first';
+      sel.appendChild(o);
+    }
+    state.sections.forEach(function(s){
+      var o = document.createElement('option'); o.value = s.name; o.textContent = s.name;
+      sel.appendChild(o);
+    });
+    if (cur) sel.value = cur;
+  });
+}
+function renderWorkerList(){
+  var el = document.getElementById('workerList');
+  if (state.workers.length === 0){ el.innerHTML = '<p class="muted-note">No workers yet.</p>'; return; }
+  el.innerHTML = state.workers.map(function(w){
+    return '<div class="sub-list-item"><span class="name">' + escapeHtml(w.name) +
+      '</span><button class="x-btn" data-remove-worker="' + w.id + '">Remove</button></div>';
+  }).join('');
+}
+function renderSectionList(){
+  var el = document.getElementById('sectionList');
+  if (state.sections.length === 0){ el.innerHTML = '<p class="muted-note">No sections yet.</p>'; return; }
+  el.innerHTML = state.sections.map(function(s){
+    return '<div class="sub-list-item"><span class="name">' + escapeHtml(s.name) +
+      '</span><button class="x-btn" data-remove-section="' + s.id + '">Remove</button></div>';
+  }).join('');
+}
+
+// ---------- records: log tab ----------
+function renderRecent(){
+  var el = document.getElementById('recentList');
+  var recs = state.records.slice(0, 25);
+  if (recs.length === 0){
+    el.innerHTML = '<div class="empty"><div class="ico">&#127807;</div><p><b>No records yet</b></p><p>Add your first work record above.</p></div>';
+    return;
+  }
+  el.innerHTML = recs.map(function(r){
+    return '<div class="entry-row" data-edit-record="' + r.id + '">' +
+      '<div class="entry-main">' +
+        '<div class="entry-date">' + escapeHtml(r.date) + '</div>' +
+        '<div class="entry-who">' + escapeHtml(r.worker) + ' &middot; ' + escapeHtml(r.section) + '</div>' +
+        '<div class="entry-nums"><b>' + round1(r.yieldKg) + ' kg</b> yield, ' + round1(r.wasteKg) + ' kg waste</div>' +
+      '</div>' +
+    '</div>';
+  }).join('');
+}
+
+async function saveNewEntry(){
+  var errEl = document.getElementById('f-err');
+  errEl.style.display = 'none';
+  var date = document.getElementById('f-date').value;
+  var worker = document.getElementById('f-worker').value;
+  var section = document.getElementById('f-section').value;
+  var y = parseFloat(document.getElementById('f-yield').value);
+  var w = parseFloat(document.getElementById('f-waste').value);
+  if (!date || !worker || !section || isNaN(y) || y < 0 || isNaN(w) || w < 0){
+    errEl.textContent = 'Fill in date, worker, section, and non-negative yield and waste.';
+    errEl.style.display = 'block';
+    return;
+  }
+  var pdoc = db.doc('plantations/' + state.currentId);
+  await pdoc.collection('records').add({
+    date: date, worker: worker, section: section, yieldKg: y, wasteKg: w,
+    createdAt: new Date().toISOString()
+  });
+  document.getElementById('f-yield').value = '';
+  document.getElementById('f-waste').value = '';
+  toast('Record saved');
+}
+
+var editingId = null;
+function openEditModal(id){
+  var r = state.records.find(function(x){ return x.id === id; });
+  if (!r) return;
+  editingId = id;
+  document.getElementById('e-date').value = r.date;
+  renderWorkerOptions(); renderSectionOptions();
+  document.getElementById('e-worker').value = r.worker;
+  document.getElementById('e-section').value = r.section;
+  document.getElementById('e-yield').value = r.yieldKg;
+  document.getElementById('e-waste').value = r.wasteKg;
+  document.getElementById('e-err').style.display = 'none';
+  document.getElementById('editModalBackdrop').classList.add('open');
+}
+function closeEditModal(){
+  document.getElementById('editModalBackdrop').classList.remove('open');
+  editingId = null;
+}
+async function saveEditedEntry(){
+  var errEl = document.getElementById('e-err');
+  var date = document.getElementById('e-date').value;
+  var worker = document.getElementById('e-worker').value;
+  var section = document.getElementById('e-section').value;
+  var y = parseFloat(document.getElementById('e-yield').value);
+  var w = parseFloat(document.getElementById('e-waste').value);
+  if (!date || !worker || !section || isNaN(y) || y < 0 || isNaN(w) || w < 0){
+    errEl.textContent = 'Fill in date, worker, section, and non-negative yield and waste.';
+    errEl.style.display = 'block';
+    return;
+  }
+  await db.doc('plantations/' + state.currentId + '/records/' + editingId).update({
+    date: date, worker: worker, section: section, yieldKg: y, wasteKg: w
+  });
+  closeEditModal();
+  toast('Record updated');
+}
+async function deleteEditedEntry(){
+  if (!editingId) return;
+  await db.doc('plantations/' + state.currentId + '/records/' + editingId).delete();
+  closeEditModal();
+  toast('Record deleted');
+}
+
+// ---------- computations ----------
+function computeAll(){
+  var records = state.records;
+  var byMonth = {}; // mk -> {yield,waste}
+  var byWorker = {}; // name -> {yield,waste,days:Set}
+  var bySection = {};
+  var byWS = {}; // "worker||section" -> {yield,days:Set}
+
+  records.forEach(function(r){
+    var mk = monthKeyOf(r.date);
+    if (!byMonth[mk]) byMonth[mk] = {yieldKg:0, wasteKg:0};
+    byMonth[mk].yieldKg += r.yieldKg; byMonth[mk].wasteKg += r.wasteKg;
+
+    if (!byWorker[r.worker]) byWorker[r.worker] = {yieldKg:0, wasteKg:0, days:new Set()};
+    byWorker[r.worker].yieldKg += r.yieldKg; byWorker[r.worker].wasteKg += r.wasteKg;
+    byWorker[r.worker].days.add(r.date);
+
+    if (!bySection[r.section]) bySection[r.section] = {yieldKg:0, wasteKg:0, days:new Set()};
+    bySection[r.section].yieldKg += r.yieldKg; bySection[r.section].wasteKg += r.wasteKg;
+    bySection[r.section].days.add(r.date);
+
+    var key = r.worker + '||' + r.section;
+    if (!byWS[key]) byWS[key] = {yieldKg:0, days:new Set()};
+    byWS[key].yieldKg += r.yieldKg; byWS[key].days.add(r.date);
+  });
+
+  return {byMonth: byMonth, byWorker: byWorker, bySection: bySection, byWS: byWS};
+}
+
+function rollingFlag(records, field, name, asOfMonth, thresholdPct){
+  var cur = records.filter(function(r){ return r[field] === name && monthKeyOf(r.date) === asOfMonth; });
+  var curYield = cur.reduce(function(s,r){ return s + r.yieldKg; }, 0);
+  var curDays = new Set(cur.map(function(r){ return r.date; })).size;
+  var curAvg = curDays > 0 ? curYield / curDays : null;
+
+  var priorMonths = [addMonths(asOfMonth,-1), addMonths(asOfMonth,-2), addMonths(asOfMonth,-3)];
+  var monthsWithData = priorMonths.filter(function(mk){
+    return records.some(function(r){ return r[field] === name && monthKeyOf(r.date) === mk; });
+  }).length;
+
+  var trailing = records.filter(function(r){ return r[field] === name && priorMonths.indexOf(monthKeyOf(r.date)) !== -1; });
+  var trYield = trailing.reduce(function(s,r){ return s + r.yieldKg; }, 0);
+  var trDays = new Set(trailing.map(function(r){ return r.date; })).size;
+  var trAvg = trDays > 0 ? trYield / trDays : null;
+
+  if (monthsWithData < 3){
+    return {flag:'insufficient', curAvg: curAvg, trAvg: null, pct: null};
+  }
+  if (curDays === 0){
+    return {flag:'no-current', curAvg: null, trAvg: trAvg, pct: null};
+  }
+  var pct = trAvg > 0 ? (curAvg - trAvg) / trAvg : 0;
+  var flag = pct >= thresholdPct ? 'high' : (pct <= -thresholdPct ? 'low' : 'normal');
+  return {flag: flag, curAvg: curAvg, trAvg: trAvg, pct: pct};
+}
+
+// ---------- dashboard render ----------
+function renderDashboard(){
+  if (!state.current) return;
+  var records = state.records;
+  var agg = computeAll();
+
+  var totalYield = records.reduce(function(s,r){ return s+r.yieldKg; }, 0);
+  var totalWaste = records.reduce(function(s,r){ return s+r.wasteKg; }, 0);
+  var totalDays = new Set(records.map(function(r){ return r.date; })).size;
+  document.getElementById('statYield').textContent = fmtKg(totalYield);
+  document.getElementById('statWaste').textContent = fmtKg(totalWaste);
+  document.getElementById('statWastePct').textContent = (totalYield+totalWaste) > 0 ? fmtPct(totalWaste/(totalYield+totalWaste)) : '0%';
+  document.getElementById('statDays').textContent = totalDays;
+
+  // monthly bars: last 12 months ending at asOfMonth (or latest data)
+  var asOf = state.current.asOfMonth || monthKeyOf(todayIso());
+  var months = [];
+  for (var i = 11; i >= 0; i--) months.push(addMonths(asOf, -i));
+  var maxVal = 0.0001;
+  months.forEach(function(mk){
+    var d = agg.byMonth[mk] || {yieldKg:0, wasteKg:0};
+    maxVal = Math.max(maxVal, d.yieldKg, d.wasteKg);
+  });
+  var barsHtml = months.map(function(mk){
+    var d = agg.byMonth[mk] || {yieldKg:0, wasteKg:0};
+    var yH = Math.max(2, Math.round((d.yieldKg / maxVal) * 110));
+    var wH = Math.max(2, Math.round((d.wasteKg / maxVal) * 110));
+    return '<div class="bar-col">' +
+      '<div style="display:flex; align-items:flex-end; gap:2px; height:110px;">' +
+        '<div class="bar-shape" style="height:' + yH + 'px" title="Yield ' + round1(d.yieldKg) + ' kg"></div>' +
+        '<div class="bar-shape waste" style="height:' + wH + 'px" title="Waste ' + round1(d.wasteKg) + ' kg"></div>' +
+      '</div>' +
+      '<div class="bar-label">' + monthLabel(mk) + '</div>' +
+    '</div>';
+  }).join('');
+  document.getElementById('monthlyBars').innerHTML = barsHtml;
+
+  // worker ranking by kg/day
+  var workerRows = Object.keys(agg.byWorker).map(function(name){
+    var d = agg.byWorker[name];
+    var days = d.days.size;
+    return {name: name, kgDay: days > 0 ? d.yieldKg/days : 0, days: days};
+  }).sort(function(a,b){ return b.kgDay - a.kgDay; });
+  renderRankList('workerRank', workerRows);
+
+  var sectionRows = Object.keys(agg.bySection).map(function(name){
+    var d = agg.bySection[name];
+    var days = d.days.size;
+    return {name: name, kgDay: days > 0 ? d.yieldKg/days : 0, days: days};
+  }).sort(function(a,b){ return b.kgDay - a.kgDay; });
+  renderRankList('sectionRank', sectionRows);
+
+  renderHeat(agg, workerRows, sectionRows);
+
+  // rolling flags
+  var threshold = state.current.thresholdPct != null ? state.current.thresholdPct : 0.2;
+  document.getElementById('rollingSub').textContent =
+    'Current: ' + monthLabel(asOf) + ' vs trailing 3-month avg, threshold \u00B1' + Math.round(threshold*100) + '%';
+  var flagRows = [];
+  Object.keys(agg.byWorker).forEach(function(name){
+    var res = rollingFlag(records, 'worker', name, asOf, threshold);
+    flagRows.push(Object.assign({name:name, kind:'Worker'}, res));
+  });
+  Object.keys(agg.bySection).forEach(function(name){
+    var res = rollingFlag(records, 'section', name, asOf, threshold);
+    flagRows.push(Object.assign({name:name, kind:'Section'}, res));
+  });
+  var order = {high:0, low:0, normal:1, insufficient:2, 'no-current':2};
+  flagRows.sort(function(a,b){
+    var pa = (a.flag==='high'||a.flag==='low') ? 0 : 1;
+    var pb = (b.flag==='high'||b.flag==='low') ? 0 : 1;
+    if (pa !== pb) return pa - pb;
+    return a.name.localeCompare(b.name);
+  });
+  renderFlags(flagRows);
+}
+
+function renderRankList(elId, rows){
+  var el = document.getElementById(elId);
+  if (rows.length === 0){ el.innerHTML = '<p class="muted-note">No data yet.</p>'; return; }
+  var max = Math.max.apply(null, rows.map(function(r){ return r.kgDay; })) || 1;
+  el.innerHTML = rows.map(function(r){
+    var pct = Math.round((r.kgDay / max) * 100);
+    return '<div class="rank-row">' +
+      '<div class="rank-top"><span class="rank-name">' + escapeHtml(r.name) + '</span>' +
+      '<span class="rank-val">' + round1(r.kgDay) + ' kg/day &middot; ' + r.days + 'd</span></div>' +
+      '<div class="rank-bar-bg"><div class="rank-bar-fill" style="width:' + pct + '%"></div></div>' +
+    '</div>';
+  }).join('');
+}
+
+function renderHeat(agg, workerRows, sectionRows){
+  var el = document.getElementById('heatTable');
+  if (workerRows.length === 0 || sectionRows.length === 0){
+    el.innerHTML = '<tr><td class="muted-note" style="padding:8px 0">Add records to see this table.</td></tr>';
+    return;
+  }
+  var maxV = 0.0001;
+  Object.keys(agg.byWS).forEach(function(k){
+    var d = agg.byWS[k]; var days = d.days.size;
+    if (days > 0) maxV = Math.max(maxV, d.yieldKg/days);
+  });
+  var html = '<tr><th></th>' + sectionRows.map(function(s){ return '<th>'+escapeHtml(s.name)+'</th>'; }).join('') + '</tr>';
+  workerRows.forEach(function(w){
+    html += '<tr><td class="rowhead">' + escapeHtml(w.name) + '</td>';
+    sectionRows.forEach(function(s){
+      var d = agg.byWS[w.name + '||' + s.name];
+      if (!d || d.days.size === 0){
+        html += '<td>&ndash;</td>';
+      } else {
+        var v = d.yieldKg / d.days.size;
+        var t = Math.min(1, v / maxV);
+        var bg = 'color-mix(in srgb, var(--green) ' + Math.round(t*70) + '%, var(--surface))';
+        html += '<td style="background:' + bg + '">' + round1(v) + '</td>';
+      }
+    });
+    html += '</tr>';
+  });
+  el.innerHTML = html;
+}
+
+function renderFlags(rows){
+  var el = document.getElementById('flagsList');
+  if (rows.length === 0){ el.innerHTML = '<p class="muted-note">No data yet.</p>'; return; }
+  el.innerHTML = rows.map(function(r){
+    var badgeClass = 'badge-' + (r.flag === 'no-current' ? 'insufficient' : r.flag);
+    var label = r.flag === 'high' ? 'High' : r.flag === 'low' ? 'Low' : r.flag === 'normal' ? 'Normal' :
+      r.flag === 'no-current' ? 'No current data' : 'Insufficient history';
+    var sub = r.kind;
+    if (r.pct != null) sub += ' &middot; ' + (r.pct >= 0 ? '+' : '') + Math.round(r.pct*100) + '% vs baseline';
+    else if (r.curAvg != null) sub += ' &middot; ' + round1(r.curAvg) + ' kg/day this month';
+    return '<div class="flag-row"><div class="flag-left"><div class="flag-name">' + escapeHtml(r.name) +
+      '</div><div class="flag-sub">' + sub + '</div></div>' +
+      '<span class="badge ' + badgeClass + '">' + label + '</span></div>';
+  }).join('');
+}
+
+// ---------- setup actions ----------
+async function renamePlantation(){
+  var name = document.getElementById('setup-name').value.trim();
+  if (!name) { toast('Enter a name'); return; }
+  await db.doc('plantations/' + state.currentId).update({name: name});
+  await loadPlantations();
+  toast('Saved');
+}
+async function addWorker(){
+  var input = document.getElementById('newWorkerInput');
+  var name = input.value.trim();
+  if (!name) return;
+  if (state.workers.some(function(w){ return w.name.toLowerCase() === name.toLowerCase(); })){
+    toast('That worker already exists'); return;
+  }
+  await db.doc('plantations/' + state.currentId).collection('workers').add({name: name});
+  input.value = '';
+}
+async function removeWorker(id){
+  await db.doc('plantations/' + state.currentId + '/workers/' + id).delete();
+}
+async function addSection(){
+  var input = document.getElementById('newSectionInput');
+  var name = input.value.trim();
+  if (!name) return;
+  if (state.sections.some(function(s){ return s.name.toLowerCase() === name.toLowerCase(); })){
+    toast('That section already exists'); return;
+  }
+  await db.doc('plantations/' + state.currentId).collection('sections').add({name: name});
+  input.value = '';
+}
+async function removeSection(id){
+  await db.doc('plantations/' + state.currentId + '/sections/' + id).delete();
+}
+async function saveBaseline(){
+  var asOf = document.getElementById('setup-asof').value;
+  var thresh = parseFloat(document.getElementById('setup-threshold').value);
+  if (!asOf || isNaN(thresh) || thresh < 1 || thresh > 100){ toast('Check the month and threshold'); return; }
+  await db.doc('plantations/' + state.currentId).update({asOfMonth: asOf, thresholdPct: thresh/100});
+  toast('Settings saved');
+}
+
+async function deleteCurrentPlantation(){
+  if (!confirm('Delete "' + (state.current ? state.current.name : '') + '" and all its data? This cannot be undone.')) return;
+  if (!confirm('Really delete everything for this plantation? Type-confirm by pressing OK again.')) return;
+  var pid = state.currentId;
+  var pdoc = db.doc('plantations/' + pid);
+  var recSnap = await pdoc.collection('records').get();
+  for (var i=0;i<recSnap.docs.length;i++){ await pdoc.collection('records').doc(recSnap.docs[i].id).delete(); }
+  var wSnap = await pdoc.collection('workers').get();
+  for (var j=0;j<wSnap.docs.length;j++){ await pdoc.collection('workers').doc(wSnap.docs[j].id).delete(); }
+  var sSnap = await pdoc.collection('sections').get();
+  for (var k=0;k<sSnap.docs.length;k++){ await pdoc.collection('sections').doc(sSnap.docs[k].id).delete(); }
+  await pdoc.delete();
+  state.currentId = null;
+  toast('Plantation deleted');
+  await loadPlantations();
+}
+
+async function exportCsv(){
+  var rows = [['Date','Worker','Section','Yield (kg)','Waste (kg)']];
+  state.records.slice().sort(function(a,b){ return a.date.localeCompare(b.date); }).forEach(function(r){
+    rows.push([r.date, r.worker, r.section, r.yieldKg, r.wasteKg]);
+  });
+  var csv = rows.map(function(row){
+    return row.map(function(cell){
+      var s = String(cell);
+      return /[",\n]/.test(s) ? '"' + s.replace(/"/g,'""') + '"' : s;
+    }).join(',');
+  }).join('\n');
+  var fname = (state.current ? state.current.name.replace(/[^a-z0-9]+/gi,'_') : 'plantation') + '_records.csv';
+  var blob = new Blob([csv], {type: 'text/csv;charset=utf-8;'});
+  var url = URL.createObjectURL(blob);
+  var a = document.createElement('a');
+  a.href = url; a.download = fname;
+  document.body.appendChild(a); a.click(); document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+}
+
+// ---------- tabs ----------
+function showTab(name){
+  document.querySelectorAll('.view').forEach(function(v){ v.classList.remove('active'); });
+  document.getElementById('view-' + name).classList.add('active');
+  document.querySelectorAll('.tabbar-btn').forEach(function(b){
+    b.classList.toggle('active', b.getAttribute('data-tab') === name);
+  });
+}
+
+// ---------- wire up ----------
+function wireEvents(){
+  document.getElementById('plantationSelect').addEventListener('change', function(e){
+    selectPlantation(e.target.value);
+  });
+  document.getElementById('addPlantationBtn').addEventListener('click', function(){
+    document.getElementById('np-name').value = '';
+    document.getElementById('np-err').style.display = 'none';
+    document.getElementById('addPlantationBackdrop').classList.add('open');
+  });
+  document.getElementById('addPlantationClose').addEventListener('click', function(){
+    document.getElementById('addPlantationBackdrop').classList.remove('open');
+  });
+  document.getElementById('np-createBtn').addEventListener('click', async function(){
+    var name = document.getElementById('np-name').value.trim();
+    if (!name){
+      document.getElementById('np-err').textContent = 'Enter a plantation name.';
+      document.getElementById('np-err').style.display = 'block';
+      return;
+    }
+    await createPlantation(name);
+    document.getElementById('addPlantationBackdrop').classList.remove('open');
+  });
+
+  document.querySelectorAll('.tabbar-btn').forEach(function(b){
+    b.addEventListener('click', function(){ showTab(b.getAttribute('data-tab')); });
+  });
+
+  document.getElementById('saveEntryBtn').addEventListener('click', saveNewEntry);
+  document.getElementById('recentList').addEventListener('click', function(e){
+    var row = e.target.closest('[data-edit-record]');
+    if (row) openEditModal(row.getAttribute('data-edit-record'));
+  });
+  document.getElementById('editModalClose').addEventListener('click', closeEditModal);
+  document.getElementById('e-saveBtn').addEventListener('click', saveEditedEntry);
+  document.getElementById('e-deleteBtn').addEventListener('click', deleteEditedEntry);
+
+  document.getElementById('renamePlantationBtn').addEventListener('click', renamePlantation);
+  document.getElementById('addWorkerBtn').addEventListener('click', addWorker);
+  document.getElementById('addSectionBtn').addEventListener('click', addSection);
+  document.getElementById('workerList').addEventListener('click', function(e){
+    var b = e.target.closest('[data-remove-worker]');
+    if (b) removeWorker(b.getAttribute('data-remove-worker'));
+  });
+  document.getElementById('sectionList').addEventListener('click', function(e){
+    var b = e.target.closest('[data-remove-section]');
+    if (b) removeSection(b.getAttribute('data-remove-section'));
+  });
+  document.getElementById('saveBaselineBtn').addEventListener('click', saveBaseline);
+  document.getElementById('exportCsvBtn').addEventListener('click', exportCsv);
+  document.getElementById('deletePlantationBtn').addEventListener('click', deleteCurrentPlantation);
+
+  ['newWorkerInput','newSectionInput'].forEach(function(id){
+    document.getElementById(id).addEventListener('keydown', function(e){
+      if (e.key === 'Enter'){ e.preventDefault(); if (id==='newWorkerInput') addWorker(); else addSection(); }
+    });
+  });
+}
+
+// ---------- password gate ----------
+function checkGate(){
+  try {
+    if (sessionStorage.getItem('ptk_authed') === '1') return true;
+  } catch(e){}
+  return false;
+}
+function wireGate(){
+  var submit = function(){
+    var val = document.getElementById('gatePassword').value;
+    if (val === SITE_PASSWORD){
+      try { sessionStorage.setItem('ptk_authed', '1'); } catch(e){}
+      document.getElementById('passwordGate').style.display = 'none';
+      document.getElementById('appRoot').style.display = '';
+      boot();
+    } else {
+      document.getElementById('gateErr').style.display = 'block';
+    }
+  };
+  document.getElementById('gateSubmit').addEventListener('click', submit);
+  document.getElementById('gatePassword').addEventListener('keydown', function(e){
+    if (e.key === 'Enter'){ e.preventDefault(); submit(); }
+  });
+  document.getElementById('gatePassword').focus();
+}
+
+async function boot(){
+  document.getElementById('f-date').value = todayIso();
+  wireEvents();
+  var ok = await initCaps();
+  if (!ok) return;
+  try {
+    var saved = localStorage.getItem('ptk_current');
+    if (saved) state.currentId = saved;
+  } catch(e){}
+  await loadPlantations();
+}
+
+function main(){
+  wireGate();
+  if (checkGate()){
+    document.getElementById('passwordGate').style.display = 'none';
+    document.getElementById('appRoot').style.display = '';
+    boot();
+  }
+}
+
+main();
+})();
+</script>
+</body>
+</html>

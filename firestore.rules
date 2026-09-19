@@ -1,0 +1,13 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // This app has no real sign-in (only the client-side password screen),
+    // so Firestore itself can't tell one visitor from another. These rules
+    // simply allow the app to read and write its own data. Real protection
+    // comes from keeping your site's password and Vercel URL private --
+    // anyone who has both can read and write this data.
+    match /{document=**} {
+      allow read, write: if true;
+    }
+  }
+}
