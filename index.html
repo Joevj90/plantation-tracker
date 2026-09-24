@@ -517,6 +517,10 @@ async function loadPlantations(){
     await createPlantation('My Plantation', true);
   } else if (!state.currentId || !list.find(function(p){return p.id===state.currentId;})){
     selectPlantation(list[0].id);
+  } else if (!state.unsubRecords){
+    // currentId is valid (e.g. remembered from a previous visit) but this
+    // is a fresh page load, so its data hasn't actually been subscribed to yet.
+    selectPlantation(state.currentId);
   }
 }
 
