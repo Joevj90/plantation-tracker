@@ -262,7 +262,10 @@ table.heat td.rowhead{text-align:left; font-weight:600;}
     </div>
 
     <div class="card" id="recentCard">
-      <h2>Recent records</h2>
+      <h2>Recent records<small>Showing your latest 25. Search to find an older one by worker, section, or date.</small></h2>
+      <div class="field" style="margin-bottom:10px">
+        <input type="text" id="recordSearchInput" placeholder="Search by worker, section, or date (YYYY-MM-DD)">
+      </div>
       <div id="recentList"></div>
     </div>
   </section>
@@ -471,13 +474,27 @@ function escapeHtml(s){
   });
 }
 
+// Wraps a promise so it rejects with a clear timeout error instead of
+// hanging forever (a Firestore call with no network/config can hang
+// indefinitely with no built-in timeout of its own).
+function withTimeout(promise, ms, label){
+  return new Promise(function(resolve, reject){
+    var timer = setTimeout(function(){
+      reject(new Error((label || 'This request') + ' timed out after ' + Math.round(ms/1000) +
+        's. Check your internet connection, and that your Firebase project and Firestore database are set up correctly.'));
+    }, ms);
+    promise.then(function(v){ clearTimeout(timer); resolve(v); },
+                 function(e){ clearTimeout(timer); reject(e); });
+  });
+}
+
 // ---------- storage init (Firebase) ----------
 async function initCaps(){
   try {
     firebase.initializeApp(firebaseConfig);
     db = firebase.firestore();
     // touch the store once so a bad config fails fast and visibly
-    await db.collection('plantations').limit(1).get();
+    await withTimeout(db.collection('plantations').limit(1).get(), 15000, 'Connecting to the database');
   } catch(e) {
     db = null;
     document.getElementById('appRoot').innerHTML =
@@ -618,9 +635,24 @@ function renderSectionList(){
 // ---------- records: log tab ----------
 function renderRecent(){
   var el = document.getElementById('recentList');
-  var recs = state.records.slice(0, 25);
+  var searchInput = document.getElementById('recordSearchInput');
+  var q = searchInput ? searchInput.value.trim().toLowerCase() : '';
+  var recs;
+  if (q === ''){
+    recs = state.records.slice(0, 25);
+  } else {
+    recs = state.records.filter(function(r){
+      return (r.worker && r.worker.toLowerCase().indexOf(q) !== -1) ||
+             (r.section && r.section.toLowerCase().indexOf(q) !== -1) ||
+             (r.date && r.date.indexOf(q) !== -1);
+    });
+  }
   if (recs.length === 0){
-    el.innerHTML = '<div class="empty"><div class="ico">&#127807;</div><p><b>No records yet</b></p><p>Add your first work record above.</p></div>';
+    if (q !== ''){
+      el.innerHTML = '<div class="empty"><div class="ico">&#128269;</div><p><b>No matches</b></p><p>No records match "' + escapeHtml(searchInput.value.trim()) + '".</p></div>';
+    } else {
+      el.innerHTML = '<div class="empty"><div class="ico">&#127807;</div><p><b>No records yet</b></p><p>Add your first work record above.</p></div>';
+    }
     return;
   }
   el.innerHTML = recs.map(function(r){
@@ -964,13 +996,13 @@ async function confirmDeletePlantation(){
   try {
     var pid = state.currentId;
     var pdoc = db.doc('plantations/' + pid);
-    var recSnap = await pdoc.collection('records').get();
-    for (var i=0;i<recSnap.docs.length;i++){ await pdoc.collection('records').doc(recSnap.docs[i].id).delete(); }
-    var wSnap = await pdoc.collection('workers').get();
-    for (var j=0;j<wSnap.docs.length;j++){ await pdoc.collection('workers').doc(wSnap.docs[j].id).delete(); }
-    var sSnap = await pdoc.collection('sections').get();
-    for (var k=0;k<sSnap.docs.length;k++){ await pdoc.collection('sections').doc(sSnap.docs[k].id).delete(); }
-    await pdoc.delete();
+    var recSnap = await withTimeout(pdoc.collection('records').get(), 15000, 'Looking up records');
+    for (var i=0;i<recSnap.docs.length;i++){ await withTimeout(pdoc.collection('records').doc(recSnap.docs[i].id).delete(), 15000, 'Deleting a record'); }
+    var wSnap = await withTimeout(pdoc.collection('workers').get(), 15000, 'Looking up workers');
+    for (var j=0;j<wSnap.docs.length;j++){ await withTimeout(pdoc.collection('workers').doc(wSnap.docs[j].id).delete(), 15000, 'Deleting a worker'); }
+    var sSnap = await withTimeout(pdoc.collection('sections').get(), 15000, 'Looking up sections');
+    for (var k=0;k<sSnap.docs.length;k++){ await withTimeout(pdoc.collection('sections').doc(sSnap.docs[k].id).delete(), 15000, 'Deleting a section'); }
+    await withTimeout(pdoc.delete(), 15000, 'Deleting the plantation');
     state.currentId = null;
     closeDeletePlantationModal();
     toast('Plantation deleted');
@@ -1045,6 +1077,7 @@ function wireEvents(){
     var row = e.target.closest('[data-edit-record]');
     if (row) openEditModal(row.getAttribute('data-edit-record'));
   });
+  document.getElementById('recordSearchInput').addEventListener('input', renderRecent);
   document.getElementById('editModalClose').addEventListener('click', closeEditModal);
   document.getElementById('e-saveBtn').addEventListener('click', saveEditedEntry);
   document.getElementById('e-deleteBtn').addEventListener('click', deleteEditedEntry);
